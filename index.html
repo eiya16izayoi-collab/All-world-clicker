@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Global History Clicker - Visual Feedback</title>
+    <title>Global History Clicker - Evolution</title>
     <style>
         body { 
             transition: 0.5s; font-family: 'serif'; margin: 0; 
@@ -13,44 +13,55 @@
 
         #game-container { 
             text-align: center; border: 8px double; padding: 20px; 
-            width: 500px; position: relative; background: rgba(0,0,0,0.05);
+            width: 550px; position: relative; background: rgba(0,0,0,0.05);
             box-shadow: 0 10px 40px rgba(0,0,0,0.5);
         }
 
-        /* シンボルの演出：クリック時に跳ねる */
+        /* 進出エリアのスタイル */
+        #migration-area {
+            margin-bottom: 15px;
+            padding: 10px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 8px;
+            border: 1px dashed;
+        }
+        .migration-btn {
+            background: #fff !important; color: #000 !important;
+            padding: 10px 20px !important; font-size: 1.1rem !important;
+            border: 3px double #000 !important;
+        }
+
         #symbol-area { position: relative; height: 160px; display: flex; justify-content: center; align-items: center; }
         #symbol { 
             font-size: 110px; cursor: pointer; user-select: none; 
             transition: transform 0.05s cubic-bezier(0.175, 0.885, 0.32, 1.275);
             display: inline-block;
         }
-        #symbol:active { transform: scale(1.3) rotate(10deg); } /* クリックで巨大化＆回転 */
+        #symbol:active { transform: scale(1.3) rotate(10deg); }
 
-        /* クリック地点に数字を出すアニメーション */
         .click-float {
             position: absolute; pointer-events: none; font-weight: bold;
             font-size: 24px; animation: floatUp 0.6s ease-out forwards;
-            z-index: 100;
         }
-        @keyframes floatUp {
-            0% { transform: translateY(0); opacity: 1; }
-            100% { transform: translateY(-100px); opacity: 0; }
+        @keyframes floatUp { 0% { transform: translateY(0); opacity: 1; } 100% { transform: translateY(-100px); opacity: 0; } }
+
+        #event-container { margin: 15px 0; }
+        #event-display { background: #000; color: #fff; padding: 10px; border-radius: 4px; font-weight: bold; }
+        #event-timer-bar { height: 4px; background: #FF4500; width: 0%; transition: width 0.1s linear; margin-top: 2px; }
+
+        .stats-board { 
+            background: rgba(0,0,0,0.15); padding: 15px; margin-bottom: 20px; 
+            display: grid; grid-template-columns: 1fr 1fr; text-align: left; border-radius: 8px;
         }
 
-        #event-display { background: #000; color: #fff; padding: 10px; margin: 15px 0; border-radius: 4px; }
-        .stats-board { background: rgba(0,0,0,0.15); padding: 15px; margin-bottom: 20px; display: grid; grid-template-columns: 1fr 1fr; text-align: left; border-radius: 8px; }
-        .upgrade-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-        .upgrade-card { border: 2px solid; padding: 12px; border-radius: 6px; }
+        .upgrade-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .upgrade-card { border: 2px solid; padding: 10px; border-radius: 6px; background: rgba(255,255,255,0.05); }
 
-        /* ボタンのフィードバック */
-        button { 
-            cursor: pointer; font-weight: bold; padding: 10px; margin-top: 10px;
-            transition: transform 0.1s; border-radius: 4px;
-        }
-        button:active:not(:disabled) { transform: scale(0.9); }
-        button:disabled { opacity: 0.4; transform: scale(1) !important; }
+        button { cursor: pointer; font-weight: bold; padding: 8px; transition: 0.1s; border-radius: 4px; width: 100%; }
+        button:active:not(:disabled) { transform: scale(0.95); }
+        button:disabled { opacity: 0.3; cursor: not-allowed; }
 
-        /* モード別カラー */
+        /* モードカラー */
         .mode-ussr { color: #FFD700; border-color: #FFD700; }
         .mode-ussr button { background: #FFD700; color: #8B0000; border: none; }
         .mode-usa { color: #ffffff; border-color: #BF0A30; }
@@ -62,14 +73,19 @@
 <body class="mode-ussr">
 
     <div id="game-container" class="mode-ussr">
-        <div class="mode-switcher">
-            <button onclick="switchMode('USSR')">ソ連</button>
-            <button onclick="switchMode('USA')">アメリカ</button>
-            <button onclick="switchMode('JAPAN')">大日本帝国</button>
+        <div id="migration-area">
+            <div id="migration-status">現在の進捗: ソ連体制下</div>
+            <button id="migrate-btn" class="migration-btn" onclick="migrateCountry()" disabled>
+                10000万稼いでアメリカへ進出
+            </button>
         </div>
         
         <h1 id="title">☭ プロレタリア・クリッカー</h1>
-        <div id="event-display">平和な時代</div>
+        
+        <div id="event-container">
+            <div id="event-display">平和な時代 (x1.0)</div>
+            <div id="event-timer-bar"></div>
+        </div>
 
         <div id="symbol-area">
             <div id="symbol" onmousedown="spawnFloatText(event)">☭</div>
@@ -77,70 +93,111 @@
 
         <div class="stats-board">
             <div>共通資金: <span id="points">0</span></div>
+            <div>生産倍率: <span id="mult-val">x1.0</span></div>
             <div>1クリック: <span id="power">1</span></div>
             <div>自動生産: <span id="auto-val">0</span></div>
-            <div>生産間隔: <span id="interval-display">1000</span>ms</div>
+            <div style="grid-column: span 2; text-align:center; font-size: 0.8rem; margin-top:5px;">
+                自動生産間隔: <span id="interval-display">100.00</span>秒
+            </div>
         </div>
 
         <div id="upgrade-container" class="upgrade-grid"></div>
     </div>
 
     <script>
+        const GOAL = 100000000; // 10000万 (1億)
+
         let state = {
             mode: 'USSR', points: 0, clickPower: 1, autoPower: 0,
-            interval: 1000, debuffResist: 1.0, eventMult: 1.0,
-            peacePreservationActive: false
+            interval: 100000, 
+            debuffResist: 1.0, eventMult: 1.0,
+            usaTaxBonus: 1.0, japanSpirit: 1.0,
+            unlocked: ['USSR'] // 最初はソ連のみ
         };
 
         const upgradeData = {
             USSR: [
-                { name: "コルホーズ", desc: "Click+1", cost: 10, action: () => { state.clickPower += 1; } },
-                { name: "ソフホーズ", desc: "Auto+1", cost: 50, action: () => { state.autoPower += 1; } },
-                { name: "革命的製造", desc: "間隔-50ms", cost: 100, action: () => { state.interval = Math.max(100, state.interval - 50); resetAutoLoop(); } },
-                { name: "思想教育", desc: "デバフ耐性UP", cost: 200, action: () => { state.debuffResist -= 0.001; } }
+                { name: "五カ年計画", desc: "自動生産+5 / 間隔-10%", cost: 50, action: () => { state.autoPower += 5; state.interval *= 0.9; resetAutoLoop(); } },
+                { name: "思想教育", desc: "デバフ耐性UP", cost: 200, action: () => { state.debuffResist -= 0.05; } },
+                { name: "重工業化", desc: "クリック+10 / 間隔-5%", cost: 300, action: () => { state.clickPower += 10; state.interval *= 0.95; resetAutoLoop(); } },
+                { name: "宇宙開発競争", desc: "生産力1.5倍", cost: 2000, action: () => { state.clickPower *= 1.5; state.autoPower *= 1.5; } }
             ],
             USA: [
-                { name: "ニューディール", desc: "C-1/A+10", cost: 30, action: () => { state.clickPower = Math.max(1, state.clickPower - 1); state.autoPower += 10; } },
-                { name: "資本主義体制", desc: "C+2/間隔減", cost: 80, action: () => { state.clickPower += 2; state.interval = Math.max(100, state.interval - 30); resetAutoLoop(); } },
-                { name: "西側の主", desc: "全体大幅UP", cost: 500, action: () => { state.clickPower += 10; state.autoPower += 50; } },
-                { name: "政府投資", desc: "C+1(安価)", cost: 5, action: () => { state.clickPower += 1; } }
+                { name: "自由市場", desc: "クリック+10 / 税収ボーナス", cost: 500, action: () => { state.clickPower += 10; state.usaTaxBonus += 0.05; } },
+                { name: "シリコンバレー", desc: "間隔短縮(-20%)", cost: 5000, action: () => { state.interval *= 0.8; resetAutoLoop(); } },
+                { name: "マーシャルプラン", desc: "自動生産+500", cost: 10000, action: () => { state.autoPower += 500; } },
+                { name: "ドルの覇権", desc: "クリック+1000", cost: 50000, action: () => { state.clickPower += 1000; } }
             ],
             JAPAN: [
-                { name: "教育勅語", desc: "A+3/間隔減", cost: 50, action: () => { state.autoPower += 3; state.interval = Math.max(100, state.interval - 20); resetAutoLoop(); } },
-                { name: "大和魂", desc: "全ステータスUP", cost: 1000, action: () => { state.clickPower += 20; state.autoPower += 100; state.interval = Math.max(100, state.interval - 100); resetAutoLoop(); } },
-                { name: "天皇制", desc: "全ステ微増", cost: 150, action: () => { state.clickPower += 2; state.autoPower += 5; state.interval = Math.max(100, state.interval - 10); resetAutoLoop(); } },
-                { name: "治安維持法", desc: "1分間5倍", cost: 0, action: () => { activatePeaceLaw(); } }
+                { name: "富国強兵", desc: "Click+100 / 間隔-15%", cost: 20000, action: () => { state.clickPower += 100; state.interval *= 0.85; resetAutoLoop(); } },
+                { name: "八紘一宇", desc: "自動+1000 / 精神力UP", cost: 100000, action: () => { state.autoPower += 1000; state.japanSpirit += 0.1; } },
+                { name: "大和魂", desc: "全能力UP / 間隔-20%", cost: 500000, action: () => { state.clickPower += 500; state.autoPower += 5000; state.interval *= 0.8; resetAutoLoop(); } },
+                { name: "治安維持法", desc: "条件で1分間5倍", cost: 0, action: () => { activatePeaceLaw(); } }
             ]
         };
 
-        // --- 演出：浮き上がる数字 ---
-        function spawnFloatText(e) {
-            const area = document.getElementById('symbol-area');
-            const text = document.createElement('div');
-            text.className = 'click-float';
-            text.innerText = "+" + (state.clickPower * state.eventMult).toFixed(1);
-            
-            // クリック位置（またはシンボルの中心）に配置
-            text.style.left = `calc(50% + ${Math.random()*40-20}px)`;
-            text.style.top = `20px`;
-            
-            area.appendChild(text);
-            setTimeout(() => text.remove(), 600);
+        // 国家進出システム
+        function migrateCountry() {
+            if (state.points < GOAL) return;
+
+            if (state.mode === 'USSR') {
+                state.points -= GOAL;
+                state.mode = 'USA';
+                state.unlocked.push('USA');
+                alert("ソ連からアメリカへ進出しました！資金10000万を消費して新技術を導入します。");
+            } else if (state.mode === 'USA') {
+                state.points -= GOAL;
+                state.mode = 'JAPAN';
+                state.unlocked.push('JAPAN');
+                alert("アメリカから大日本帝国へ進出しました！全ステータスを継承し、帝国主義の頂点を目指します。");
+            }
+            switchMode(state.mode);
         }
 
         function switchMode(m) {
+            // アンロックされていない国には行けない
+            if (!state.unlocked.includes(m)) {
+                alert("まだこの国へ進出する権利がありません。10000万貯めてください。");
+                return;
+            }
+
             state.mode = m;
-            document.body.className = 'mode-' + m.toLowerCase();
-            document.getElementById('game-container').className = 'mode-' + m.toLowerCase();
+            const container = document.getElementById('game-container');
+            const body = document.body;
+            container.className = 'mode-' + m.toLowerCase();
+            body.className = 'mode-' + m.toLowerCase();
+
             const title = document.getElementById('title');
             const symbol = document.getElementById('symbol');
+            const migBtn = document.getElementById('migrate-btn');
+            const migStatus = document.getElementById('migration-status');
 
-            if (m === 'USSR') { document.body.style.backgroundColor = '#8B0000'; title.innerText = '☭ プロレタリア・クリッカー'; symbol.innerText = '☭'; }
-            else if (m === 'USA') { document.body.style.backgroundColor = '#002868'; title.innerText = '＄ キャピタル・クリッカー'; symbol.innerText = '＄'; }
-            else if (m === 'JAPAN') { document.body.style.backgroundColor = '#eeeeee'; title.innerText = '☉ 帝国クリッカー'; symbol.innerText = '☉'; }
+            if (m === 'USSR') {
+                body.style.backgroundColor = '#8B0000';
+                title.innerText = '☭ プロレタリア・クリッカー';
+                symbol.innerText = '☭';
+                migStatus.innerText = "現在の進捗: ソ連体制下";
+                migBtn.innerText = "10000万稼いでアメリカへ進出";
+                migBtn.style.display = "block";
+            } else if (m === 'USA') {
+                body.style.backgroundColor = '#002868';
+                title.innerText = '＄ キャピタル・クリッカー';
+                symbol.innerText = '＄';
+                migStatus.innerText = "現在の進捗: アメリカ資本主義";
+                migBtn.innerText = "10000万稼いで日本へ進出";
+                migBtn.style.display = "block";
+            } else if (m === 'JAPAN') {
+                body.style.backgroundColor = '#eeeeee';
+                title.innerText = '☉ 帝国クリッカー';
+                symbol.innerText = '☉';
+                migStatus.innerText = "現在の進捗: 大日本帝国（最終形態）";
+                migBtn.style.display = "none"; // 日本が最終
+            }
             renderUpgrades();
             updateDisplay();
         }
+
+        // --- 以下共通処理 ---
 
         function renderUpgrades() {
             const container = document.getElementById('upgrade-container');
@@ -158,57 +215,87 @@
             if (state.points >= u.cost) {
                 state.points -= u.cost;
                 u.action();
-                u.cost += 1;
+                u.cost = Math.floor(u.cost * 1.3) + 1;
                 renderUpgrades();
                 updateDisplay();
             }
         }
 
-        function activatePeaceLaw() {
-            let threshold = state.clickPower * state.autoPower * 100;
-            if (state.points > threshold && !state.peacePreservationActive) {
-                state.points = Math.floor(state.points / 2);
-                state.peacePreservationActive = true;
-                state.eventMult *= 5;
-                alert("治安維持法発動！");
-                setTimeout(() => { state.eventMult /= 5; state.peacePreservationActive = false; updateDisplay(); }, 60000);
-            } else { alert("条件未達成"); }
+        function spawnFloatText() {
+            const area = document.getElementById('symbol-area');
+            const text = document.createElement('div');
+            text.className = 'click-float';
+            let val = (state.clickPower * state.eventMult * state.usaTaxBonus * state.japanSpirit).toFixed(1);
+            text.innerText = "+" + val;
+            text.style.left = `calc(50% + ${Math.random()*60-30}px)`;
+            text.style.top = `20px`;
+            area.appendChild(text);
+            setTimeout(() => text.remove(), 600);
         }
 
-        // イベントシステム省略（ロジックは前回同様）
-        setInterval(() => {
-            const ev = ["世界大戦", "世界恐慌", "東西冷戦", "ソ連崩壊", "大東亜共栄圏"][Math.floor(Math.random()*5)];
-            document.getElementById('event-display').innerText = `【歴史】${ev}`;
-            // (簡易イベント処理)
-            setTimeout(() => { document.getElementById('event-display').innerText = "平和な時代"; }, 15000);
-        }, 45000);
-
         function updateDisplay() {
-            document.getElementById('points').innerText = Math.floor(state.points);
-            document.getElementById('power').innerText = (state.clickPower * state.eventMult).toFixed(1);
-            document.getElementById('auto-val').innerText = (state.autoPower * state.eventMult).toFixed(1);
-            document.getElementById('interval-display').innerText = state.interval;
+            const p = state.points;
+            document.getElementById('points').innerText = Math.floor(p);
+            document.getElementById('mult-val').innerText = `x${(state.eventMult * state.usaTaxBonus * state.japanSpirit).toFixed(1)}`;
+            document.getElementById('power').innerText = (state.clickPower * state.eventMult * state.usaTaxBonus * state.japanSpirit).toFixed(1);
+            document.getElementById('auto-val').innerText = (state.autoPower * state.eventMult * state.usaTaxBonus * state.japanSpirit).toFixed(1);
+            document.getElementById('interval-display').innerText = (state.interval / 1000).toFixed(2);
             
+            // 進出ボタンの制御
+            const migBtn = document.getElementById('migrate-btn');
+            if (p >= GOAL) {
+                migBtn.disabled = false;
+                migBtn.style.boxShadow = "0 0 15px #fff";
+            } else {
+                migBtn.disabled = true;
+                migBtn.style.boxShadow = "none";
+            }
+
             document.querySelectorAll('.upgrade-card button').forEach(btn => {
                 const cost = parseInt(btn.innerText.replace('コスト: ', ''));
-                btn.disabled = state.points < cost;
+                btn.disabled = p < cost;
             });
         }
 
-        document.getElementById('symbol').onclick = () => { state.points += state.clickPower * state.eventMult; updateDisplay(); };
+        // イベントシステム
+        setInterval(() => {
+            const evs = [
+                { name: "世界大戦", mult: 2.5, color: "#ff4500" },
+                { name: "世界恐慌", mult: 0.1, color: "#555" },
+                { name: "冷戦", mult: 1.5, color: "#00bfff" }
+            ];
+            const ev = evs[Math.floor(Math.random() * evs.length)];
+            let m = ev.mult;
+            if (m < 1.0) m = 1.0 - ((1.0 - m) * state.debuffResist);
+            state.eventMult = m;
+            const d = document.getElementById('event-display');
+            const b = document.getElementById('event-timer-bar');
+            d.innerText = `【${ev.name}】発動中 (x${state.eventMult.toFixed(1)})`;
+            d.style.color = ev.color;
+            b.style.transition = "none"; b.style.width = "100%";
+            setTimeout(() => { b.style.transition = "width 15s linear"; b.style.width = "0%"; }, 100);
+            setTimeout(() => { state.eventMult = 1.0; d.innerText = "平和な時代 (x1.0)"; d.style.color = "#fff"; updateDisplay(); }, 15000);
+        }, 45000);
+
+        function performClick() {
+            state.points += state.clickPower * state.eventMult * state.usaTaxBonus * state.japanSpirit;
+            spawnFloatText();
+            updateDisplay();
+        }
+
+        document.getElementById('symbol').onclick = performClick;
 
         let autoTimer;
         function resetAutoLoop() {
             clearInterval(autoTimer);
-            autoTimer = setInterval(() => { state.points += state.autoPower * state.eventMult; updateDisplay(); }, state.interval);
+            autoTimer = setInterval(() => {
+                state.points += state.autoPower * state.eventMult * state.usaTaxBonus * state.japanSpirit;
+                updateDisplay();
+            }, state.interval);
         }
 
         window.onkeydown = (e) => {
-            if (e.code === 'Space') { 
-                e.preventDefault(); 
-                document.getElementById('symbol').dispatchEvent(new Event('mousedown'));
-                document.getElementById('symbol').click(); 
-            }
+            if (e.code === 'Space') { e.preventDefault(); performClick(); }
         };
 
         switchMode('USSR');
