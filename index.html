@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Historical Crisis Clicker</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="game-container">
+        <div class="mode-switcher">
+            <button onclick="switchMode('USSR')">ソ連</button>
+            <button onclick="switchMode('USA')">アメリカ</button>
+            <button onclick="switchMode('JAPAN')">大日本帝国</button>
+        </div>
+        
+        <h1 id="title">☭ プロレタリア・クリッカー</h1>
+        <div id="event-display">平和な時代</div>
+
+        <div id="symbol-area">
+            <div id="symbol">☭</div>
+        </div>
+
+        <div class="stats-board">
+            <div>資金/生産量: <span id="points">0</span></div>
+            <div>1クリックの威力: <span id="power">1</span></div>
+            <div>自動生産 (1回): <span id="auto-val">0</span></div>
+            <div>生産間隔: <span id="interval-display">1000</span>ms</div>
+        </div>
+
+        <div id="upgrade-container" class="upgrade-grid">
+            </div>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>
