@@ -4,10 +4,111 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Historical Crisis Clicker</title>
-    <link rel="stylesheet" href="style.css">
+    <style>
+        /* --- CSS: 国家の色彩とレイアウト --- */
+        body { 
+            transition: 0.5s; 
+            font-family: 'Georgia', 'Times New Roman', serif; 
+            margin: 0; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            min-height: 100vh; 
+            overflow: hidden; 
+        }
+
+        #game-container { 
+            text-align: center; 
+            border: 8px double; 
+            padding: 20px; 
+            width: 480px; 
+            position: relative; 
+            transition: 0.3s;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+
+        #symbol { 
+            font-size: 100px; 
+            cursor: pointer; 
+            user-select: none; 
+            transition: transform 0.05s; 
+            margin: 10px; 
+            display: inline-block;
+        }
+
+        #event-display { 
+            background: #000; 
+            color: #fff; 
+            padding: 8px; 
+            margin: 15px 0; 
+            font-weight: bold; 
+            min-height: 24px;
+            border-radius: 4px;
+        }
+
+        .stats-board { 
+            background: rgba(0,0,0,0.1); 
+            padding: 15px; 
+            margin-bottom: 15px; 
+            font-size: 1rem; 
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 5px;
+            text-align: left;
+        }
+
+        .upgrade-grid { 
+            display: grid; 
+            grid-template-columns: 1fr 1fr; 
+            gap: 10px; 
+        }
+
+        .upgrade-card { 
+            border: 1px solid; 
+            padding: 10px; 
+            font-size: 0.85rem; 
+            display: flex; 
+            flex-direction: column; 
+            justify-content: space-between;
+            background: rgba(255,255,255,0.05);
+        }
+
+        .mode-switcher { margin-bottom: 20px; }
+        .mode-switcher button { margin: 0 5px; padding: 5px 15px; cursor: pointer; }
+
+        button { 
+            cursor: pointer; 
+            font-family: inherit; 
+            font-weight: bold; 
+            padding: 8px; 
+            margin-top: 8px;
+            transition: 0.2s;
+        }
+
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* --- モード別テーマ --- */
+
+        /* ソ連：赤と金 */
+        .mode-ussr { background-color: #8B0000; color: #FFD700; border-color: #FFD700; }
+        .mode-ussr button { background: #FFD700; color: #8B0000; border: none; }
+        .mode-ussr button:hover { background: #fff; }
+
+        /* アメリカ：紺と赤白 */
+        .mode-usa { background-color: #002868; color: #ffffff; border-color: #BF0A30; }
+        .mode-usa button { background: #BF0A30; color: #ffffff; border: 1px solid #fff; }
+        .mode-usa button:hover { background: #002868; }
+
+        /* 大日本帝国：白と深い赤（旭日風） */
+        .mode-japan { background-color: #ffffff; color: #9e0b0f; border-color: #9e0b0f; }
+        .mode-japan button { background: #9e0b0f; color: #ffffff; border: none; }
+        .mode-japan button:hover { background: #000; }
+        .mode-japan .stats-board { border: 1px solid #9e0b0f; background: rgba(158, 11, 15, 0.05); }
+    </style>
 </head>
-<body>
-    <div id="game-container">
+<body class="mode-ussr">
+
+    <div id="game-container" class="mode-ussr">
         <div class="mode-switcher">
             <button onclick="switchMode('USSR')">ソ連</button>
             <button onclick="switchMode('USA')">アメリカ</button>
@@ -22,15 +123,180 @@
         </div>
 
         <div class="stats-board">
-            <div>資金/生産量: <span id="points">0</span></div>
-            <div>1クリックの威力: <span id="power">1</span></div>
-            <div>自動生産 (1回): <span id="auto-val">0</span></div>
-            <div>生産間隔: <span id="interval-display">1000</span>ms</div>
+            <div>生産/資金: <span id="points">0</span></div>
+            <div>1クリック: <span id="power">1</span></div>
+            <div>自動生産: <span id="auto-val">0</span></div>
+            <div>間隔: <span id="interval-display">1000</span>ms</div>
         </div>
 
         <div id="upgrade-container" class="upgrade-grid">
             </div>
     </div>
-    <script src="script.js"></script>
+
+    <script>
+        // --- JavaScript: 国家運営ロジック ---
+
+        let state = {
+            mode: 'USSR',
+            points: 0,
+            clickPower: 1,
+            autoPower: 0,
+            interval: 1000,
+            debuffResist: 1.0,
+            eventMult: 1.0,
+            peacePreservationActive: false
+        };
+
+        const upgradeData = {
+            USSR: [
+                { name: "コルホーズ", desc: "1クリック生産+1", cost: 10, action: () => { state.clickPower += 1; } },
+                { name: "ソフホーズ", desc: "自動生産量+1", cost: 50, action: () => { state.autoPower += 1; } },
+                { name: "革命的製造", desc: "間隔短縮(-50ms)", cost: 100, action: () => { state.interval = Math.max(100, state.interval - 50); resetAutoLoop(); } },
+                { name: "革命的思想教育", desc: "デバフ耐性UP(-0.1%)", cost: 200, action: () => { state.debuffResist -= 0.001; } }
+            ],
+            USA: [
+                { name: "ニューディール", desc: "Click-1/Auto+10", cost: 30, action: () => { state.clickPower = Math.max(1, state.clickPower - 1); state.autoPower += 10; } },
+                { name: "資本主義体制", desc: "Click+2/間隔短縮", cost: 80, action: () => { state.clickPower += 2; state.interval = Math.max(100, state.interval - 30); resetAutoLoop(); } },
+                { name: "西側の主", desc: "全体大幅強化", cost: 500, action: () => { state.clickPower += 10; state.autoPower += 50; } },
+                { name: "政府投資", desc: "Click+1(低コスト)", cost: 5, action: () => { state.clickPower += 1; } }
+            ],
+            JAPAN: [
+                { name: "教育勅語", desc: "Auto+3/間隔短縮", cost: 50, action: () => { state.autoPower += 3; state.interval = Math.max(100, state.interval - 20); resetAutoLoop(); } },
+                { name: "大和魂", desc: "全ステータス強化", cost: 1000, action: () => { state.clickPower += 20; state.autoPower += 100; state.interval = Math.max(100, state.interval - 100); resetAutoLoop(); } },
+                { name: "天皇制", desc: "全ステータス微増", cost: 150, action: () => { state.clickPower += 2; state.autoPower += 5; state.interval = Math.max(100, state.interval - 10); resetAutoLoop(); } },
+                { name: "治安維持法", desc: "1分間5倍(条件有)", cost: 0, action: () => { activatePeaceLaw(); } }
+            ]
+        };
+
+        function switchMode(m) {
+            state.mode = m;
+            const container = document.getElementById('game-container');
+            const body = document.body;
+            container.className = 'mode-' + m.toLowerCase();
+            body.className = 'mode-' + m.toLowerCase();
+
+            const title = document.getElementById('title');
+            const symbol = document.getElementById('symbol');
+
+            if (m === 'USSR') {
+                body.style.backgroundColor = '#8B0000';
+                title.innerText = '☭ プロレタリア・クリッカー';
+                symbol.innerText = '☭';
+            } else if (m === 'USA') {
+                body.style.backgroundColor = '#002868';
+                title.innerText = '＄ キャピタル・クリッカー';
+                symbol.innerText = '＄';
+            } else if (m === 'JAPAN') {
+                body.style.backgroundColor = '#eeeeee';
+                title.innerText = '☉ 帝国クリッカー';
+                symbol.innerText = '☉';
+            }
+            renderUpgrades();
+            updateDisplay();
+        }
+
+        function renderUpgrades() {
+            const container = document.getElementById('upgrade-container');
+            container.innerHTML = '';
+            upgradeData[state.mode].forEach((u, i) => {
+                const card = document.createElement('div');
+                card.className = 'upgrade-card';
+                card.innerHTML = `<strong>${u.name}</strong><span>${u.desc}</span><button id="up-${i}" onclick="buyUpgrade(${i})">コスト: ${u.cost}</button>`;
+                container.appendChild(card);
+            });
+        }
+
+        function buyUpgrade(i) {
+            const u = upgradeData[state.mode][i];
+            if (state.points >= u.cost) {
+                state.points -= u.cost;
+                u.action();
+                u.cost += 1;
+                renderUpgrades();
+                updateDisplay();
+            }
+        }
+
+        function activatePeaceLaw() {
+            let threshold = state.clickPower * state.autoPower * 100;
+            if (state.points > threshold && !state.peacePreservationActive) {
+                state.points = Math.floor(state.points / 2);
+                state.peacePreservationActive = true;
+                let originalMult = state.eventMult;
+                state.eventMult *= 5;
+                alert("治安維持法発動！");
+                setTimeout(() => { state.eventMult = originalMult; state.peacePreservationActive = false; updateDisplay(); }, 60000);
+            } else {
+                alert("発動条件（資金 > Click×Auto×100）を満たしていません。");
+            }
+        }
+
+        const events = [
+            { name: "世界大戦", action: () => { state.eventMult = Math.random() > 0.3 ? 2.0 : 0.1; } },
+            { name: "世界恐慌", action: () => { state.eventMult = 0.2; } },
+            { name: "東西冷戦", action: () => { state.eventMult = (state.mode === 'JAPAN') ? 0.5 : 1.5; } },
+            { name: "ソ連崩壊", action: () => { state.eventMult = (state.mode === 'USSR') ? 0.2 : 1.8; } },
+            { name: "ベトナム戦争", action: () => { state.eventMult = (state.mode === 'USA') ? 0.6 : 1.5; } },
+            { name: "大東亜共栄圏", action: () => { if(state.mode === 'JAPAN') state.eventMult = 2.0; } },
+            { name: "コミンテルン", action: () => { if(state.mode === 'USSR') state.eventMult = 1.5; } },
+            { name: "ポツダム宣言", action: () => { if(state.mode === 'USA') { state.interval = 100; resetAutoLoop(); } if(state.mode === 'JAPAN') state.eventMult = 0.4; } }
+        ];
+
+        setInterval(() => {
+            const ev = events[Math.floor(Math.random() * events.length)];
+            state.eventMult = 1.0;
+            ev.action();
+            if (state.eventMult < 1.0 && state.mode === 'USSR') state.eventMult = 1.0 - ((1.0 - state.eventMult) * state.debuffResist);
+            document.getElementById('event-display').innerText = `【歴史イベント】${ev.name}`;
+            setTimeout(() => { state.eventMult = 1.0; document.getElementById('event-display').innerText = "平和な時代"; updateDisplay(); }, 15000);
+        }, 45000);
+
+        function updateDisplay() {
+            document.getElementById('points').innerText = Math.floor(state.points);
+            document.getElementById('power').innerText = (state.clickPower * state.eventMult).toFixed(1);
+            document.getElementById('auto-val').innerText = (state.autoPower * state.eventMult).toFixed(1);
+            document.getElementById('interval-display').innerText = state.interval;
+            
+            // ボタンの有効無効
+            upgradeData[state.mode].forEach((u, i) => {
+                const btn = document.getElementById(`up-${i}`);
+                if (btn) btn.disabled = state.points < u.cost;
+            });
+        }
+
+        function performClick() {
+            state.points += state.clickPower * state.eventMult;
+            updateDisplay();
+        }
+
+        document.getElementById('symbol').onclick = performClick;
+
+        let autoTimer;
+        function resetAutoLoop() {
+            clearInterval(autoTimer);
+            autoTimer = setInterval(() => {
+                state.points += state.autoPower * state.eventMult;
+                updateDisplay();
+            }, state.interval);
+        }
+
+        let keyIntervals = {};
+        window.onkeydown = (e) => {
+            if (keyIntervals[e.code]) return;
+            keyIntervals[e.code] = setInterval(() => {
+                if (e.code === 'Space') { e.preventDefault(); performClick(); document.getElementById('symbol').style.transform = 'scale(0.9)'; }
+                if (e.code === 'KeyA') buyUpgrade(0);
+                if (e.code === 'KeyL') buyUpgrade(1);
+            }, 50);
+        };
+        window.onkeyup = (e) => { 
+            clearInterval(keyIntervals[e.code]); 
+            delete keyIntervals[e.code]; 
+            if (e.code === 'Space') document.getElementById('symbol').style.transform = 'scale(1)'; 
+        };
+
+        switchMode('USSR');
+        resetAutoLoop();
+    </script>
 </body>
 </html>
